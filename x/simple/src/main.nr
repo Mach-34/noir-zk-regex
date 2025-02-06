@@ -1,6 +1,6 @@
 mod regex;
 
-global MAX_INPUT_SIZE: u32 = 128;
+global MAX_INPUT_SIZE: u32 = 4096;
 
 fn main(input: [u8; MAX_INPUT_SIZE]) {
     let x = regex::regex_match(input);
@@ -18,19 +18,19 @@ fn test_out() {
     println(x);
 }
 
-// #[test]
-// fn test_pass_1() {
-//     // let input: [u8; 8] = "x12-yy_z".as_bytes();
-//     let input: [u8; 26] = "x12-yy_     x12-yy_z      ".as_bytes();
+#[test]
+fn test_pass_1() {
+    let input= "   x12-yy_z        ".as_bytes();
+    // let input: [u8; 26] = "x12-yy_     x12-yy_z      ".as_bytes();
 
-//     let out = regex::regex_match(input);
-//     for i in 0..10 {
-//         if i < out.len() {
-//             println(out.get(i));
-//         }
-//     }
-//     // println(out);
-// }
+    let out = regex::regex_match(input);
+    for i in 0..10 {
+        if i < out.len() {
+            println(out.get(i));
+        }
+    }
+    // println(out);
+}
 
 // #[test]
 fn test_2() {
@@ -53,28 +53,40 @@ fn test_2() {
 
 // #[test]
 fn test_3() {
-    let input = "1=a 2=b 2=bc 2=c d".as_bytes();
+    // let input = "1=a 2=b 2=bc 2=c d".as_bytes();
+    let input = "1=a 2=b 2=bc 2=c 2=c d".as_bytes();
+    let out = regex::regex_match(input);
+    for i in 0..6 {
+        if i < out.len() {
+            println(out.get(i));
+        }
+    }
+
+    println(out.len());
+    
+}
+
+// #[test]
+fn test_4() {
+    let input = "Latin-Extension=Ʃƣƙ Greek=ϕω Cyrillic=иЩ Arabic=أبت Devanagari=आदित्य Hiragana&Katakana=なツ".as_bytes();
     let out = regex::regex_match(input);
     for i in 0..3 {
         if i < out.len() {
             println(out.get(i));
         }
     }
-    
 }
 
 #[test]
-fn test_4() {
-    let input = "aa".as_bytes();
+fn test_pass_2() {
+    let input = "email was meant for @alkgvuso          ".as_bytes();
     let out = regex::regex_match(input);
-    println(out.get(0));
+    for i in 0..1 {
+        if i < out.len() {
+            println(out.get(i));
+        }
+    }
 }
-
-// #[test]
-// fn test_pass_2() {
-//     let input: [u8; 9] = "x99-yyy_z".as_bytes();
-//     regex::regex_match(input);
-// }
 
 // #[test]
 // fn test_pass_3() {

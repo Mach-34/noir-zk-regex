@@ -1,3 +1,4 @@
+use log::{self, error, info};
 use std::{
     collections::BTreeSet, collections::HashSet, fs::File, io::Write, iter::FromIterator,
     path::Path,
@@ -152,27 +153,67 @@ global table: {sparse_str}
         .map(|id| format!("(s == {id})"))
         .collect_vec()
         .join(" | ");
-    let end_states_condition_body = format!("(s == {}) & (s_next == {})", accept_state_ids[0], accept_state_ids[1]);
-    let finished_condition_body = format!("(s == {}) & (s_next == {})", accept_state_ids[1], accept_state_ids[1]);
+    let end_states_condition_body = match accept_state_ids.len() == 1 {
+        true => format!(
+            "(s == {}) & (s_next == {})",
+            accept_state_ids[0], accept_state_ids[0]
+        ),
+        false => format!(
+            "(s == {}) & (s_next == {})",
+            accept_state_ids[0], accept_state_ids[1]
+        ),
+    };
+    let finished_condition_body = match accept_state_ids.len() == 1 {
+        true => format!(
+            "(s == {}) & (s_next == {})",
+            accept_state_ids[0], accept_state_ids[0]
+        ),
+        false => format!(
+            "(s == {}) & (s_next == {})",
+            accept_state_ids[1], accept_state_ids[1]
+        ),
+    };
+    let end_range_condition_body = accept_state_ids
+        .iter()
+        .map(|id| format!("(s_next_end == {id})"))
+        .collect_vec()
+        .join(" | ");
     // If substrings have to be extracted, the function returns a vector of BoundedVec
     // otherwise there is no return type
     let all_cases = {
-        let mut cases = substr_ranges.iter().map(|range_set| {
-            range_set
-                .iter()
-                .map(|(range_start, range_end)| {
-                    indent(&format!("(s == {range_start}) & (s_next == {range_end}),"), 3)
-                })
-                .collect::<Vec<_>>()
-                .join("\n")
-        }).collect::<Vec<_>>().join("\n");
+        let mut cases = substr_ranges
+            .iter()
+            .map(|range_set| {
+                range_set
+                    .iter()
+                    .map(|(range_start, range_end)| {
+                        indent(
+                            &format!("//(s == {range_start}) & (s_next == {range_end}),"),
+                            3,
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
         cases = format!(
-            "{cases}\n{accept_state}\n{finished_state}",
+            "{cases}\n//{accept_state}\n//{finished_state}",
             accept_state = format!("{},", indent(&end_states_condition_body, 3)),
             finished_state = indent(&finished_condition_body, 3)
         );
-        format!("[\n{}\n\t\t];", cases)
+        format!("[\n{}\n\t\t//];", cases)
     };
+
+    /// HERE ///
+    println!("substrings: {:?}", regex_and_dfa.substrings);
+    // let max_substring_sizes: Vec<Option> = regex_and_dfa
+    //     .substrings
+    //     .substring_boundaries
+    //     .iter()
+    //     .map(|boundary| range_set.len())
+    //     .collect::<Vec<_>>();
+
     let fn_body = if gen_substrs {
         let mut first_condition = true;
 
@@ -189,21 +230,16 @@ global table: {sparse_str}
                     .join(" | ");
 
                 // For the first condition, use `if`, for others, use `else if`
-                let (start_part, start_index) = if first_condition {
-                    first_condition = false;
-                    let start_index_text = format!("\tif (consecutive_substr == 0) {{
-        start_index = i;
-    }};\n");
-                    ("if", start_index_text)
+                let start_part = if first_condition {
+                    first_condition = false;  
+                    "if"
                 } else {
-                    ("else if", format!(""))
+                    "else if"
                 };
-
 
                 // The body of the condition handling substring creation/updating
                 format!(
                     "{start_part} ({range_conditions}) {{
-    {start_index}
     current_substring.push(temp);
     consecutive_substr = 1;   
 }}"
@@ -249,23 +285,37 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N
     // check the match
     for i in 0..N {{
         let temp = input[i] as Field;
+        let range = i >= start & i <= end;
         s_next = {table_access_s_next};
         let potential_s_next = {table_access_s_next_temp};
         if s_next == 0 {{
             s = 0;
             s_next = potential_s_next;
         }}
+        assert(!range | s_next != 0, "non-consecutive range");
         std::as_witness(s_next);
 
-        let range = i >= start & i <= end;
-        let cases = {all_cases}
+        //let cases = {all_cases}
         // idk why have to say == true
-        let found = cases.any(|case|  case == true | range == false );
+        //let found = cases.any(|case|  case == true | range == false );
         s = s_next;
-        assert(found, "no match");
+        //assert(found, "no match");
     }}
     // check final state
     assert({final_states_condition_body}, f"no match: {{s}}");
+    
+    // check indexes
+    //assert(start <= end, "bad start/end");
+    //let s_next_start_idx = input[start] as Field;
+    //std::as_witness(s_next_start_idx);
+    //let s_next_start = {table_access_start_lookup};
+    //assert(s_next_start == 1, "bad start index");        
+
+    // get end index
+    let s_next_end_idx = s * 256 + input[end - 1] as Field;
+    std::as_witness(s_next_end_idx);
+    let s_next_end = {table_access_end_lookup};
+    assert({end_range_condition_body}, "bad end index");
 
     substrings
 }}
@@ -302,6 +352,10 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
             current_substring = BoundedVec::new();
             consecutive_substr = 0;
         }}
+        // track start of regex match
+        if ((s == 0) & (s_next == 1)) {{
+            start_index = i;
+        }}
         // Fill up substrings
 {conditions}
         s = s_next;
@@ -313,18 +367,26 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
     // Add pending substring that hasn't been added
     if consecutive_substr == 1 {{
         substrings.push(current_substring);
-        end_index = input.len();
+        if !complete {{
+            end_index = input.len();
+        }}
     }}
     (substrings, start_index, end_index)
 }}"#,
-            regex_pattern = regex_and_dfa
-                .regex_pattern
-                .replace('\n', "\\n")
-                .replace('\r', "\\r"),
+            regex_pattern = escape_non_ascii(
+                &regex_and_dfa
+                    .regex_pattern
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+            ),
             table_access_255 = access_table("255", sparse_array),
             table_access_s_next = access_table("s * 256 + temp", sparse_array),
             table_access_s_next_temp = access_table("temp", sparse_array),
-            substr_length = regex_and_dfa.substrings.substring_ranges.len(),
+            table_access_start_lookup = access_table("s_next_start_idx", sparse_array),
+            table_access_end_lookup = access_table("s_next_end_idx", sparse_array),
+            // end_state = accept_state_ids[accept_state_ids.len() - 1],
+            // substr_length = regex_and_dfa.substrings.substring_ranges.len(),
+            substr_length = substr_ranges.len(),
         )
     } else {
         format!(
@@ -341,10 +403,12 @@ pub fn regex_match<let N: u32>(input: [u8; N]) {{
     }}
     assert({final_states_condition_body}, f"no match: {{s}}");
 }}"#,
-            regex_pattern = regex_and_dfa
-                .regex_pattern
-                .replace('\n', "\\n")
-                .replace('\r', "\\r"),
+            regex_pattern = escape_non_ascii(
+                &regex_and_dfa
+                    .regex_pattern
+                    .replace('\n', "\\n")
+                    .replace('\r', "\\r")
+            ),
             table_access_255 = access_table("255", sparse_array),
             table_access_s_idx = access_table("s_idx", sparse_array),
         )
@@ -381,4 +445,18 @@ fn access_table(s: &str, sparse: bool) -> String {
         true => format!("table.get({})", s),
         false => format!("table[{}]", s),
     }
+}
+
+// Noir does not like non-ascii comments so use this to show regex
+fn escape_non_ascii(input: &str) -> String {
+    input
+        .chars()
+        .map(|c| {
+            if c.is_ascii() {
+                c.to_string()
+            } else {
+                format!("\\u{{{:04x}}}", c as u32)
+            }
+        })
+        .collect()
 }

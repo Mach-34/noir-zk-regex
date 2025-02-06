@@ -592,20 +592,19 @@ comptime fn make_lookup_table() -> [Field; 6144] {
         
 pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N>, 1> {
     let (substrings, start, end) = unsafe { __regex_match(input) };
-    println(f"start: {start}, end: {end}");
+    
     // "Previous" state
     let mut s: Field = 0;
     s = table[255];
     // "Next"/upcoming state
     let mut s_next: Field = 0;
-
     // ensure state transition occurs in the range
     let mut consecutive = true;
 
     // check the match
     for i in 0..N {
-        let range = i >= start & i <= end;
         let temp = input[i] as Field;
+        let range = i >= start & i <= end;
         s_next = table[s * 256 + temp];
         let potential_s_next = table[temp];
         if s_next == 0 {
@@ -615,27 +614,34 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N
         }
         std::as_witness(s_next);
 
-        // let cases = [
-            
-        //     (s == 21) & (s_next == 22),
-        //     (s == 22) & (s_next == 22),
-        //    (s == 22) & (s_next == 23),
-        //    (s == 23) & (s_next == 23)
-		// ];
+        //let cases = [
+            //(s == 21) & (s_next == 22),
+            //(s == 22) & (s_next == 22),
+//            (s == 22) & (s_next == 23),
+//            (s == 23) & (s_next == 23)
+		//];
         // idk why have to say == true
-        // let found = cases.any(|case|  case == true | !range);
-        println(f"consecutive: {consecutive}, range: {range}, s: {s}, s_next: {s_next}");
+        //let found = cases.any(|case|  case == true | range == false );
         s = s_next;
-        // assert(found, "no match");
+        //assert(found, "no match");
     }
     // check final state
     assert((s == 22) | (s == 23), f"no match: {s}");
-    assert(consecutive, "given substring range was not matched");
+    
     // check indexes
-    //assert(start <= end, "bad start/end");
-    let s_next_start_idx = input[start] as Field;
+    assert(start <= end, "bad start/end");
+    let s_start_idx = input[start] as Field;
+    std::as_witness(s_start_idx);
+    let s_start: Field = table[s_start_idx];
+    let s_next_start_idx = s_start * 256 + input[start + 1] as Field;
+    std::as_witness(s_next_start_idx);
     let s_next_start = table[s_next_start_idx];
-    println(f"s_next_start: {s_next_start}");
+
+    println(f"start idx: {start}, start: {s_start}, start_next: {s_next_start}");
+    let start_x = table[255];
+    println(f"start 255: {start_x}");
+
+    // assert(s_next_start == 1, "bad start index");        
 
     // get end index
     let s_next_end_idx = s * 256 + input[end - 1] as Field;
@@ -678,10 +684,10 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
             current_substring = BoundedVec::new();
             consecutive_substr = 0;
         }
+        // Fill up substrings
         if ((s == 0) & (s_next == 1)) {
             start_index = i;
         }
-        // Fill up substrings
         if ((s == 21) & (s_next == 22) | (s == 22) & (s_next == 22)) {
             current_substring.push(temp);
             consecutive_substr = 1;   
