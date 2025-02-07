@@ -1,6 +1,5 @@
 use std::{
-    collections::BTreeSet, collections::HashSet, fs::File, io::Write, iter::FromIterator,
-    path::Path,
+    collections::{BTreeSet, HashSet}, fmt::format, fs::File, io::Write, iter::FromIterator, path::Path
 };
 
 use comptime::{FieldElement, SparseArray};
@@ -173,6 +172,49 @@ global table: {sparse_str}
         );
         format!("[\n{}\n\t\t];", cases)
     };
+
+    let substr_length = regex_and_dfa.substrings.substring_ranges.len();
+
+      // Constrain substring
+
+      let start_end_index_params = if substr_length > 1 {"start_indices: [u32; NUM_SUBSTRINGS],\n\tend_indices: [u32; NUM_SUBSTRINGS]"} else { "start: u32,\n\tend: u32" };
+
+      let regex_match_constrained_start_end_vars = if substr_length > 1 { "start_indices, end_indices" } else { "start, end" };
+
+      let regex_match_constrained_range_check = if substr_length > 1 {format!("i >= start_indices[0] & i <= end_indices[{substr_length}]")} else {format!("i >= start & i <= end")};
+
+      let regex_match_unconstrained_return_type =  if substr_length > 1 { format!("(BoundedVec<BoundedVec<Field, N>, {substr_length}>, [u32; {substr_length}], [u32; {substr_length}])") } else {format!("(BoundedVec<BoundedVec<Field, N>, {substr_length}>, u32, u32)")};
+
+      let regex_match_unconstrained_indice_array_definitions = if substr_length > 1 { format!("let mut start_indices: [u32; {substr_length}] = [0; {substr_length}];\n\tlet mut end_indices: [u32; {substr_length}] = [0; {substr_length}];") } else { format!("") };
+
+      let regex_match_unconstrained_substr_index_definition = if substr_length > 1 { format!("let mut substr_index = 0;")} else { format!("") };
+
+      let regex_match_unconstrained_indice_array_assignment = if substr_length > 1 { format!("start_indices[substr_index] = start_index;\n\tend_indices[substr_index] = end_index;\n\tsubstr_index += 1;")} else { format!("") };
+
+      let regex_match_unconstrained_return = if substr_length > 1 {"start_indices, end_indices"} else {"start_index, end_index"};
+
+      let single_substring_extraction = if substr_length > 1 { "" } else { "let substring = substrings.get_unchecked(0);\n" };
+
+      let multiple_substring_outer_loop_open = if substr_length > 1 { format!("
+  for j in 0..NUM_SUBSTRINGS {{
+      let substring = substrings.get_unchecked((j));
+      let start = start_indices[j];
+      let end = end_indices[j];") } else { format!("") };
+
+      let multiple_substring_outer_loop_close = if substr_length > 1 {"\n}"} else {""};
+      let substring_plurality = if substr_length > 1 {"s"} else {""};
+
+      let constrain_substring_static_function_body = format!("
+      let mut substr_index = 0;
+      for j in 0..INPUT_LEN {{
+          let substr_char = substring.get_unchecked(substr_index);
+          let input_char = input[j];
+          if (j >= start) & (j < end - 1) {{
+              assert(substr_char as u8 == input_char);
+              substr_index += 1;
+          }}
+      }}");
+
     let fn_body = if gen_substrs {
         let mut first_condition = true;
 
@@ -230,6 +272,7 @@ global table: {sparse_str}
     // reset the substring holder for next use
     current_substring = BoundedVec::new();
     consecutive_substr = 0;
+    {regex_match_unconstrained_indice_array_assignment}
 }}"
         );
 
@@ -238,8 +281,20 @@ global table: {sparse_str}
         format!(
             r#"
 {table_str}
+
+pub fn constrain_substrings<let INPUT_LEN: u32, let NUM_SUBSTRINGS: u32>(
+    input: [u8; INPUT_LEN], 
+    substrings: BoundedVec<BoundedVec<Field, INPUT_LEN>, NUM_SUBSTRINGS>, 
+    {start_end_index_params}
+) {{
+    {single_substring_extraction}// constrain substring{substring_plurality} {multiple_substring_outer_loop_open}{constrain_substring_static_function_body}{multiple_substring_outer_loop_close}
+}}
+
 pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N>, {substr_length}> {{
-    let (substrings, start, end) = unsafe {{ __regex_match(input) }};
+    let (substrings, {regex_match_constrained_start_end_vars}) = unsafe {{ __regex_match(input) }};
+
+    // constrain extracted substrings
+    constrain_substrings::<N, {substr_length}>(input, substrings, {regex_match_constrained_start_end_vars});
     
     // "Previous" state
     let mut s: Field = 0;
@@ -258,7 +313,7 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N
         }}
         std::as_witness(s_next);
 
-        let range = i >= start & i <= end;
+        let range = {regex_match_constrained_range_check};
         let cases = {all_cases}
         // idk why have to say == true
         let found = cases.any(|case|  case == true | range == false );
@@ -271,9 +326,10 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<BoundedVec<Field, N
     substrings
 }}
 
-pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<BoundedVec<Field, N>, {substr_length}>, u32, u32) {{
+pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> {regex_match_unconstrained_return_type} {{
     // regex: {regex_pattern}
     let mut substrings: BoundedVec<BoundedVec<Field, N>, {substr_length}> = BoundedVec::new();
+    {regex_match_unconstrained_indice_array_definitions}
 
     // "Previous" state
     let mut s: Field = 0;
@@ -286,6 +342,7 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
     let mut start_index = 0;
     let mut end_index = 0;
     let mut complete = false;
+    {regex_match_unconstrained_substr_index_definition}
 
     for i in 0..input.len() {{
         let temp = input[i] as Field;
@@ -312,7 +369,7 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
     if consecutive_substr == 1 {{
         substrings.push(current_substring);
     }}
-    (substrings, start_index, end_index)
+    (substrings, {regex_match_unconstrained_return})
 }}"#,
             regex_pattern = regex_and_dfa
                 .regex_pattern
@@ -321,7 +378,6 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Bo
             table_access_255 = access_table("255", sparse_array),
             table_access_s_next = access_table("s * 256 + temp", sparse_array),
             table_access_s_next_temp = access_table("temp", sparse_array),
-            substr_length = regex_and_dfa.substrings.substring_ranges.len(),
         )
     } else {
         format!(

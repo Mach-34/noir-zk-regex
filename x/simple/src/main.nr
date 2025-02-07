@@ -1,38 +1,34 @@
+use regex::regex_match;
+
 mod regex;
 
-global MAX_INPUT_SIZE: u32 = 128;
+global MAX_INPUT_SIZE: u32 = 1024;
 
 fn main(input: [u8; MAX_INPUT_SIZE]) {
     let x = regex::regex_match(input);
 }
 
 // #[test]
-fn test_out() {
-    let input: [u8; 8] = "abcdabcd".as_bytes();
-    let mut full_input = [0; MAX_INPUT_SIZE];
-    for i in 8..16 {
-        full_input[i] = input[i - 8];
-    }
-    println(full_input);
-    let x = regex::regex_match(input);
-    println(x);
-}
-
-// #[test]
-// fn test_pass_1() {
-//     // let input: [u8; 8] = "x12-yy_z".as_bytes();
-//     let input: [u8; 26] = "x12-yy_     x12-yy_z      ".as_bytes();
-
-//     let out = regex::regex_match(input);
-//     for i in 0..10 {
-//         if i < out.len() {
-//             println(out.get(i));
-//         }
+// fn test_out() {
+//     let input: [u8; 8] = "abcdabcd".as_bytes();
+//     let mut full_input = [0; MAX_INPUT_SIZE];
+//     for i in 8..16 {
+//         full_input[i] = input[i - 8];
 //     }
-//     // println(out);
+//     println(full_input);
+//     let x = regex::regex_match(input);
+//     println(x);
 // }
 
 #[test]
+fn test_pass_1() {
+    let input = " x12-yy_z".as_bytes();
+    // let input = "x12-yy_x12-yy_z".as_bytes();
+
+    regex::regex_match(input);
+}
+
+// #[test]
 fn test_2() {
     let input2 = "\r\nsubject:this is a test.\r\n            ".as_bytes();
     let input = "subject:これはテストです。\r\n".as_bytes();
@@ -41,27 +37,43 @@ fn test_2() {
         x[i + 1] = input[i];
     }
     // x[0] = 0xFF;
-    println(x);
+    // println(x);
     // let (out, _, _) = regex::__regex_match(input);
     let out = regex::regex_match(input2);
-    for i in 0..10 {
-        if i < out.len() {
-            println(out.get(i));
-        }
-    }
+    let out_length = out.len();
+    println(f"out length: {out_length}");
+    // for i in 0..10 {
+    //     if i < out.len() {
+    //         println(out.get(i));
+    //     }
+    // }
 }
 
 // #[test]
-// fn test_pass_2() {
-//     let input: [u8; 9] = "x99-yyy_z".as_bytes();
-//     regex::regex_match(input);
+// fn test_3() {
+//     let input = "7aab89ac".as_bytes();
+//     let output = regex_match(input);
+//     for i in 0..1 {
+//         if i < output.len() {
+//             let storage = output.get_unchecked(i).storage();
+//             let len = output.get_unchecked(i).len();
+//             println(f"output: {storage}; len: {len}");
+//         }
+//     }
+//     println(f"input: {input}");
 // }
 
-// #[test]
-// fn test_pass_3() {
-//     let input: [u8; 8] = "x00-yy_z".as_bytes();
-//     regex::regex_match(input);
-// }
+#[test]
+fn test_pass_2() {
+    let input: [u8; 9] = "x99-yyy_z".as_bytes();
+    regex::regex_match(input);
+}
+
+#[test]
+fn test_pass_3() {
+    let input: [u8; 8] = "x00-yy_z".as_bytes();
+    regex::regex_match(input);
+}
 
 // #[test]
 // fn test_pass_4() {

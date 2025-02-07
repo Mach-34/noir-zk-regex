@@ -119,7 +119,7 @@ fn process_decomposed(cli: Cli) {
             template_name.as_deref(),
             noir_file_path.as_deref(),
             gen_substrs,
-            sparse_array
+            sparse_array,
         ) {
             eprintln!("Error: {}", e);
             std::process::exit(1);
@@ -147,7 +147,7 @@ fn process_raw(cli: Cli) {
             template_name.as_deref(),
             noir_file_path.as_deref(),
             gen_substrs,
-            sparse_array
+            sparse_array,
         ) {
             eprintln!("Error: {}", e);
             std::process::exit(1);
