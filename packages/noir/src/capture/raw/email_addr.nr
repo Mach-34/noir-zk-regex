@@ -1,12 +1,10 @@
-
-use crate::common::Sequence;
-
+use crate::common::{get_index_sequence, Sequence};
 
 global table: [Field; 1280] = comptime { make_lookup_table() };
 
 comptime fn make_lookup_table() -> [Field; 1280] {
     let mut table = [0; 1280];
-        table[3 * 256 + 0] = 4;
+    table[3 * 256 + 0] = 4;
     table[4 * 256 + 0] = 4;
     table[3 * 256 + 1] = 4;
     table[4 * 256 + 1] = 4;
@@ -852,17 +850,19 @@ comptime fn make_lookup_table() -> [Field; 1280] {
     table
 }
 
-
 pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool) {
     let substrings = unsafe { __regex_match(input) };
-    
+
     // "Previous" state
     let mut s: Field = 0;
     s = table[255];
     // "Next"/upcoming state
     let mut s_next: Field = 0;
-    let mut start_range = 0;
-    let mut end_range = 0;
+
+    let sequence = substrings.get_unchecked(0);
+    let start = sequence.index();
+    let end = sequence.end();
+    let range_predicates = get_index_sequence::<N>(start, end);
 
     // check the match
     for i in 0..N {
@@ -876,37 +876,35 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
         }
         std::as_witness(s_next);
 
-        // range conditions for substring matches
-        if ((start_range == 0) & (end_range == 0)) {
-            start_range = i as Field;
-        }
-        if (((s == 3) & (s_next == 4)) & (end_range == 0)) {
-            end_range = i as Field + 1;
-        }
-        
+        let range_0 = range_predicates[i];
 
-        let range_0 = substrings.get_unchecked(0).in_range(i);
-        let case_0 = [
-            (s == 1) & ((s_next == 1) | (s_next == 2)),
-        	(s_next == 1) & ((s == 0)),
-        	(s == 2) & ((s_next == 1) | (s_next == 2) | (s_next == 3)),
-        	(s == 3) & ((s_next == 1) | (s_next == 2) | (s_next == 3))
-        ].any(|case| case == true) | !range_0;
+        // (s == 1) and (s' == 1) | (s' == 2)
+        // (s' == 1) and (s == 0)
+        // (s == 2) and (s' == 1) or (s' == 2) or (s' == 3)
 
+        let s_next_is_1_or_2 = (s_next - 1) * (s_next - 2);
+        std::as_witness(s_next_is_1_or_2);
+        let s_next_is_1_2_3 = s_next_is_1_or_2 * (s_next - 3);
+        std::as_witness(s_next_is_1_2_3);
 
+        // case0 = 0 if (s == 1) AND ((s_next == 1) OR (s_next == 2))
+        let case0 = (s - 1) * 0x10000 + s_next_is_1_or_2;
+        // case1 = 0 if (s == 0) AND ((s_next == 1)
+        let case1 = s * 0x100 + (s_next - 1);
+        // case2 = 0 if (s == 2) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
+        let case2 = (s - 2) * 0x1000000 + s_next_is_1_2_3;
+        // case3 = 0 if (s == 3) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
+        let case3 = (s - 3) * 0x1000000 + s_next_is_1_2_3;
 
-        let substring_range_check = [case_0]
-            .all(|case| case == true);
-    
-        assert(substring_range_check, "substr array ranges wrong");
-                
-    
+        // case_match = 0 if any of case0, case1, case2, case3 are 0
+        let case_match = case0 * case1 * case2 * case3;
+
+        let substring_range_check = case_match * range_0;
+        assert_eq(substring_range_check, 0, "substr array ranges wrong");
         s = s_next;
     }
     // check final state
-    
     let matched: bool = (s == 3) | (s == 4);
-            
     // constrain extracted substrings to be in match range
     //let full_match = Sequence::new(start_range as u32, end_range as u32 - start_range as u32);
     //let full_match_end = full_match.end();
@@ -920,9 +918,8 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
     // }
     (substrings, matched)
 }
-    
 
-pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) ->  BoundedVec<Sequence, 1> {
+pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) -> BoundedVec<Sequence, 1> {
     // regex: [A-Za-z0-9!#$%&'*+=?\-\^_`{|}~./@]+@[A-Za-z0-9.\-]+
     let mut substrings: BoundedVec<Sequence, 1> = BoundedVec::new();
     let mut current_substring = Sequence::default();
@@ -955,14 +952,22 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) ->  BoundedVec<Se
         }
         // Fill up substrings
 
-
-        if ((s == 0) & (s_next == 1) | (s == 1) & (s_next == 1) | (s == 1) & (s_next == 2) | (s == 2) & (s_next == 1) | (s == 2) & (s_next == 2) | (s == 2) & (s_next == 3) | (s == 3) & (s_next == 1) | (s == 3) & (s_next == 2) | (s == 3) & (s_next == 3)) {
-    
+        if (
+            (s == 0) & (s_next == 1)
+                | (s == 1) & (s_next == 1)
+                | (s == 1) & (s_next == 2)
+                | (s == 2) & (s_next == 1)
+                | (s == 2) & (s_next == 2)
+                | (s == 2) & (s_next == 3)
+                | (s == 3) & (s_next == 1)
+                | (s == 3) & (s_next == 2)
+                | (s == 3) & (s_next == 3)
+        ) {
             if (consecutive_substr == 0) {
                 current_substring.index = i;
             };
             current_substring.length += 1;
-            consecutive_substr = 1; 
+            consecutive_substr = 1;
         } else if ((consecutive_substr == 1) & (s_next == 0)) {
             current_substring = Sequence::default();
             full_match = Sequence::default();
@@ -990,11 +995,5 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) ->  BoundedVec<Se
         full_match.length = input.len() - full_match.index;
     }
 
-    
-
     substrings
 }
-    
-            
-        
-            

@@ -1,8 +1,4 @@
-use crate::{
-    capture::raw::timestamp as timestamp_regex,
-    common::Sequence,
-    constants::{TIMESTAMP_LEN},
-};
+use crate::{capture::raw::timestamp as timestamp_regex, common::Sequence, constants::TIMESTAMP_LEN};
 
 /**
  * Extract timestamp

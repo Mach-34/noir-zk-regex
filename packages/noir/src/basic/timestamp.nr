@@ -1,12 +1,10 @@
-
 use crate::common::Sequence;
-
 
 global table: [Field; 8960] = comptime { make_lookup_table() };
 
 comptime fn make_lookup_table() -> [Field; 8960] {
     let mut table = [0; 8960];
-        table[33 * 256 + 0] = 34;
+    table[33 * 256 + 0] = 34;
     table[34 * 256 + 0] = 34;
     table[33 * 256 + 1] = 34;
     table[34 * 256 + 1] = 34;
@@ -1519,10 +1517,8 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> bool {
         std::as_witness(s_idx);
         s = table[s_idx];
     }
-    
+
     let matched: bool = (s == 33) | (s == 34);
-            
+
     matched
 }
-        
-            
