@@ -44,39 +44,50 @@ pub fn get_end_range_predicate(accept_state_ids: &Vec<usize>) -> String {
         .join(" | ")
 }
 
-pub fn get_substring_range_predicates(substr_ranges: &Vec<BTreeSet<(usize, usize)>>) -> String {
-    let substr_cases = substr_ranges
+pub fn get_substring_range_predicates(
+    substr_ranges: &Vec<BTreeSet<(usize, usize)>>,
+) -> (String, String) {
+    let substr_functions = substr_ranges
         .iter()
         .enumerate()
-        .map(|(index, range)| squash_transition_predicate(range, index))
+        .map(|(index, range)| make_substring_transition_predicate_functions(range, index))
         .join("");
 
-    let final_range_predicate = {
-        let mut cases = Vec::new();
-        for i in 0..substr_ranges.len() {
-            cases.push(format!("case_{}", i));
-        }
-        let case_str = cases.join(", ");
-        indent(
-            &format!(
+    let substr_cases = (0..substr_ranges.len())
+        .map(|i| {
+            let range_gate = format!("let range_{i} = range_predicates[0][i];");
+            let substr_range_check =
+                format!("let substr_check_{i} = substring_{i}_range_check(s, s_next, range_{i});");
+            format!(
                 r#"
-let substring_range_check = [{case_str}]
-    .all(|case| case == true);
-    
-assert(substring_range_check, "substr array ranges wrong");
-                "#
-            ),
-            2,
-        )
+{range_gate}
+{substr_range_check}
+        "#
+            )
+        })
+        .join("");
+    let (composite_check, substring_range_check_target) = match substr_ranges.len() {
+        1 => ("".to_string(), "substr_check_0".to_string()),
+        _ => {
+            let range_cases = (0..substr_ranges.len())
+                .map(|i| format!("substr_check_{}", i))
+                .join(" * ");
+            let composite_check = format!("let composit_check = {};", range_cases);
+            (composite_check.to_string(), "composit_check".to_string())
+        }
     };
-
-    format!(
-        r#"
+    let range_predicates = indent(
+        &format!(
+            r#"
 {substr_cases}
-
-{final_range_predicate}
+{composite_check}
+let substring_range_check = {substring_range_check_target};
+assert_eq(substring_range_check, 0, "substr array ranges wrong");
     "#
-    )
+        ),
+        2,
+    );
+    (substr_functions, range_predicates)
 }
 
 pub fn substring_extraction_conditions(
@@ -158,7 +169,10 @@ if (consecutive_substr == 0) {{
  * @param index - the index of the substring match
  * @return the optimize state matches
  */
-fn squash_transition_predicate(states: &BTreeSet<(usize, usize)>, index: usize) -> String {
+pub fn make_substring_transition_predicate_functions(
+    states: &BTreeSet<(usize, usize)>,
+    index: usize,
+) -> String {
     use std::collections::{HashMap, HashSet};
 
     // Create maps for forward and reverse connections
@@ -197,7 +211,7 @@ fn squash_transition_predicate(states: &BTreeSet<(usize, usize)>, index: usize) 
     }
 
     // Second pass: Find remaining edges that need to be covered
-    let mut uncovered = states
+    let uncovered = states
         .iter()
         .filter(|&&(s, next)| !covered.contains(&(s, next)))
         .collect::<Vec<_>>();
@@ -222,34 +236,41 @@ fn squash_transition_predicate(states: &BTreeSet<(usize, usize)>, index: usize) 
     // Sort results by single value
     result.sort_by_key(|sm| sm.single);
 
-    // Build the string
     let cases = result
         .iter()
-        .map(|state| {
-            let (single_label, matches_label) = match state.s {
+        .enumerate()
+        .map(|(idx, case)| {
+            let (single_label, matches_label) = match case.s {
                 true => ("s", "s_next"),
                 false => ("s_next", "s"),
             };
-            let matches_str = state
+
+            let safety_gap = 0x100usize.pow(idx as u32 + 1);
+            let single_case = format!("({single_label} - {}) * 0x{:x})", case.single, safety_gap);
+            let multi_match = case
                 .match_vec
                 .iter()
-                .map(|state| format!("({} == {})", matches_label, state))
-                .join(" | ");
-            format!("({} == {}) & ({})", single_label, state.single, matches_str)
+                .map(|m| format!("({matches_label} - {})", m))
+                .join(" * ");
+            format!("let case_{idx} = ({single_case} + ({multi_match});")
         })
-        .join(",\n\t");
-
-    indent(
-        &format!(
-            r#"
-let range_{index} = substrings.get_unchecked({index}).in_range(i);
-let case_{index} = [
+        .join("\n\t");
+    let range_match = match result.len() {
+        1 => "range_gate * case_0".to_string(),
+        _ => {
+            let match_str = (0..result.len()).map(|i| format!("case_{}", i)).join(" * ");
+            format!("let char_match = {};\n\trange_gate * char_match", match_str)
+        }
+    };
+    let function = format!(
+        r#"
+fn substring_{index}_range_check(s: Field, s_next: Field, range_gate: Field) -> Field {{
     {cases}
-].any(|case| case == true) | !range_{index};
-"#
-        ),
-        2,
-    )
+    {range_match}
+}}
+    "#
+    );
+    function
 }
 
 /**
@@ -279,7 +300,7 @@ pub fn force_match_condition(
         },
     };
 
-    let match_statement_str =match force_match {
+    let match_statement_str = match force_match {
         true => format!(
             r#"
     assert({condition}, "Match not found");
@@ -292,4 +313,20 @@ pub fn force_match_condition(
         ),
     };
     (return_type_str, return_statement_str, match_statement_str)
+}
+
+pub fn make_index_range_predicates(num_substrings: usize) -> String {
+    let index_sequences = (0..num_substrings)
+        .map(|i| format!("get_index_sequence::<N>(substrings.get_unchecked({i}))"))
+        .join(",\n\t");
+    indent(
+        &format!(
+            r#"
+let range_predicates = [
+    {index_sequences}       
+];
+    "#
+        ),
+        1,
+    )
 }

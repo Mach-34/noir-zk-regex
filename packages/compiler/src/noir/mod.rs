@@ -5,15 +5,15 @@ mod table;
 mod utils;
 
 use itertools::Itertools;
-use std::{fs::File, io::Write, path::Path, collections::BTreeSet};
+use std::{collections::BTreeSet, fs::File, io::Write, path::Path};
 
-use crate::structs::RegexAndDFA;
 use self::{
+    common::get_common_regex_def,
+    fn_body::{capture_def, match_def, unconstrained_capture_def},
     table::make_lookup_table,
     utils::escape_non_ascii,
-    fn_body::{match_def, capture_def, unconstrained_capture_def},
-    common::get_common_regex_def
 };
+use crate::structs::RegexAndDFA;
 
 const ACCEPT_STATE_ID: &str = "accept";
 const BYTE_SIZE: u32 = 256; // u8 size
@@ -36,12 +36,18 @@ pub fn gen_noir_fn(
     gen_substrs: bool,
     sparse_array: Option<bool>,
     force_match: Option<bool>,
-    use_common: Option<&str>
+    use_common: Option<&str>,
 ) -> Result<(), std::io::Error> {
     println!("{}", regex_and_dfa.dfa);
     let use_sparse = sparse_array.unwrap_or(false);
     let force_match = force_match.unwrap_or(true);
-    let noir_fn = to_noir_fn(regex_and_dfa, gen_substrs, use_sparse, force_match, use_common);
+    let noir_fn = to_noir_fn(
+        regex_and_dfa,
+        gen_substrs,
+        use_sparse,
+        force_match,
+        use_common,
+    );
     let mut file = File::create(path)?;
     file.write_all(noir_fn.as_bytes())?;
     file.flush()?;
@@ -69,11 +75,10 @@ fn to_noir_fn(
     use_common: Option<&str>,
 ) -> String {
     // Regex pattern
-    let mut regex_pattern =  
-        regex_and_dfa
-            .regex_pattern
-            .replace('\n', "\\n")
-            .replace('\r', "\\r");
+    let mut regex_pattern = regex_and_dfa
+        .regex_pattern
+        .replace('\n', "\\n")
+        .replace('\r', "\\r");
     println!("Generating Noir code for regex: {}", regex_pattern);
     regex_pattern = escape_non_ascii(&regex_pattern);
     // Parse the accepted states and rows for the DFA lookup table
@@ -98,12 +103,20 @@ fn to_noir_fn(
     // generate function body
     let regex_match_def = match gen_substrs {
         true => {
-            let constrained = capture_def(&accept_state_ids, substr_ranges, sparse_array, force_match);
-            let unconstrained = unconstrained_capture_def(&regex_pattern, &accept_state_ids, substr_ranges, sparse_array);
-            format!(r#"
+            let constrained =
+                capture_def(&accept_state_ids, substr_ranges, sparse_array, force_match);
+            let unconstrained = unconstrained_capture_def(
+                &regex_pattern,
+                &accept_state_ids,
+                substr_ranges,
+                sparse_array,
+            );
+            format!(
+                r#"
 {constrained}
 {unconstrained}
-            "#)
+            "#
+            )
         }
         false => match_def(&regex_pattern, &accept_state_ids, sparse_array, force_match),
     };
@@ -125,7 +138,18 @@ fn to_noir_fn(
             "#,
         );
     } else {
-        let common_import = format!("use {}::Sequence;", use_common.unwrap());
+        let common_import = format!(
+            r#"
+use {use_common_path}::{{
+    Sequence,
+    S_IS_ZERO,
+    get_index_sequence,
+    extract_s_params_from_table
+}};
+"#,
+            use_common_path = use_common.unwrap(),
+        );
+
         regex_codegen = format!(
             r#"
 {common_import}
@@ -139,13 +163,13 @@ fn to_noir_fn(
 
 /**
  * Parse the accepted states and rows for the DFA lookup table
- * 
+ *
  * @param regex_and_dfa - the regex and dfa to generate the noir function for
  * @returns
  *    - the accepted states
  *    - the rows for the DFA lookup table
  */
-fn parse_dfa(regex_and_dfa: &RegexAndDFA) -> (Vec<usize>, TableRows)  {
+fn parse_dfa(regex_and_dfa: &RegexAndDFA) -> (Vec<usize>, TableRows) {
     // Multiple accepting states are not supported
     // This is a vector nonetheless, to support an extra accepting state we'll use
     // to allow any character occurrences after the original accepting state
@@ -160,7 +184,7 @@ fn parse_dfa(regex_and_dfa: &RegexAndDFA) -> (Vec<usize>, TableRows)  {
         accept_state_ids.len() == 1,
         "there should be exactly 1 accept state"
     );
-    
+
     // curr_state + char_code -> next_state
     let mut rows: Vec<(usize, u8, usize)> = vec![];
 
@@ -193,7 +217,7 @@ fn parse_dfa(regex_and_dfa: &RegexAndDFA) -> (Vec<usize>, TableRows)  {
                 rows.push((state.state_id, char_code, tran_next_state_id));
             }
         }
-    };
+    }
 
     (accept_state_ids, rows)
 }

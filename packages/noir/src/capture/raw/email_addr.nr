@@ -850,6 +850,27 @@ comptime fn make_lookup_table() -> [Field; 1280] {
     table
 }
 
+fn substring_1_range_check(s: Field, s_next: Field, range_gate: Field) -> Field {
+    let s_next_is_1_or_2 = (s_next - 1) * (s_next - 2);
+    std::as_witness(s_next_is_1_or_2);
+    let s_next_is_1_2_3 = s_next_is_1_or_2 * (s_next - 3);
+    std::as_witness(s_next_is_1_2_3);
+
+    // case0 = 0 if (s == 1) AND ((s_next == 1) OR (s_next == 2))
+    let case0 = (s - 1) * 0x10000 + s_next_is_1_or_2;
+    // case1 = 0 if (s == 0) AND ((s_next == 1)
+    let case1 = s * 0x100 + (s_next - 1);
+    // case2 = 0 if (s == 2) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
+    let case2 = (s - 2) * 0x1000000 + s_next_is_1_2_3;
+    // case3 = 0 if (s == 3) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
+    let case3 = (s - 3) * 0x1000000 + s_next_is_1_2_3;
+
+    // case_match = 0 if any of case0, case1, case2, case3 are 0
+    let case_match = case0 * case1 * case2 * case3;
+    // return substring range match
+    range_gate * case_match
+}
+
 pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool) {
     let substrings = unsafe { __regex_match(input) };
 
@@ -859,10 +880,13 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
     // "Next"/upcoming state
     let mut s_next: Field = 0;
 
-    let sequence = substrings.get_unchecked(0);
-    let start = sequence.index();
-    let end = sequence.end();
-    let range_predicates = get_index_sequence::<N>(start, end);
+    // let sequence = substrings.get_unchecked(0);
+    // let start = sequence.index();
+    // let end = sequence.end();
+    // let range_predicates = get_index_sequence::<N>(start, end);
+    let range_predicates = [
+        get_index_sequence::<N>(substrings.get_unchecked(0))
+    ];
 
     // check the match
     for i in 0..N {
@@ -876,30 +900,13 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
         }
         std::as_witness(s_next);
 
-        let range_0 = range_predicates[i];
+        let range_0 = range_predicates[0][i];
 
         // (s == 1) and (s' == 1) | (s' == 2)
         // (s' == 1) and (s == 0)
         // (s == 2) and (s' == 1) or (s' == 2) or (s' == 3)
 
-        let s_next_is_1_or_2 = (s_next - 1) * (s_next - 2);
-        std::as_witness(s_next_is_1_or_2);
-        let s_next_is_1_2_3 = s_next_is_1_or_2 * (s_next - 3);
-        std::as_witness(s_next_is_1_2_3);
-
-        // case0 = 0 if (s == 1) AND ((s_next == 1) OR (s_next == 2))
-        let case0 = (s - 1) * 0x10000 + s_next_is_1_or_2;
-        // case1 = 0 if (s == 0) AND ((s_next == 1)
-        let case1 = s * 0x100 + (s_next - 1);
-        // case2 = 0 if (s == 2) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
-        let case2 = (s - 2) * 0x1000000 + s_next_is_1_2_3;
-        // case3 = 0 if (s == 3) AND ((s_next == 1) OR (s_next == 2) OR (s_next == 3))
-        let case3 = (s - 3) * 0x1000000 + s_next_is_1_2_3;
-
-        // case_match = 0 if any of case0, case1, case2, case3 are 0
-        let case_match = case0 * case1 * case2 * case3;
-
-        let substring_range_check = case_match * range_0;
+        let substring_range_check = substring_1_range_check(s, s_next, range_0);
         assert_eq(substring_range_check, 0, "substr array ranges wrong");
         s = s_next;
     }

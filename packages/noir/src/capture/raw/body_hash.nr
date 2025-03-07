@@ -1871,10 +1871,13 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
     s = table[255];
     // "Next"/upcoming state
 
-    let sequence = substrings.get_unchecked(0);
-    let start = sequence.index();
-    let end = sequence.end();
-    let range_predicates = get_index_sequence::<N>(start, end);
+    // let sequence = substrings.get_unchecked(0);
+    // let start = sequence.index();
+    // let end = sequence.end();
+    // let range_predicates = get_index_sequence::<N>(start, end);
+    let range_predicates = [
+        get_index_sequence::<N>(substrings.get_unchecked(0))
+    ];
 
     // 54,083 vs 80,000
 
@@ -1893,7 +1896,7 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
         std::as_witness(s_next);
 
         // instead of `substrings.get_unchecked(0).in_range(i), we read from the predicate array
-        let range_0 = range_predicates[i];
+        let range_0 = range_predicates[0][i];
 
         let s_match = (s - 32) * (s - 33); // if match, this is 0
         let s_next_match = (s_next - 33); // if match, this is 0

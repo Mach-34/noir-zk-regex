@@ -1,7 +1,8 @@
 use super::{
     conditions::{
-        force_match_condition, get_final_states_predicate, substring_extraction_conditions,
-        get_end_states_predicate, get_substring_range_predicates
+        force_match_condition, get_end_states_predicate, get_final_states_predicate,
+        get_substring_range_predicates, make_index_range_predicates,
+        make_substring_transition_predicate_functions, substring_extraction_conditions,
     },
     table::access_table,
     BYTE_SIZE,
@@ -44,7 +45,7 @@ pub fn capture_def(
     accept_state_ids: &Vec<usize>,
     substr_ranges: &Vec<BTreeSet<(usize, usize)>>,
     sparse_array: bool,
-    force_match: bool
+    force_match: bool,
 ) -> String {
     // table access according to lookup table arch
     let table_access_255 = access_table("255", sparse_array);
@@ -54,67 +55,50 @@ pub fn capture_def(
     // DFA predicates and conditional substring sequence building
     let final_states_predicate = get_final_states_predicate(accept_state_ids);
     let end_states_predicate = get_end_states_predicate(accept_state_ids);
-    let substring_range_predicates = get_substring_range_predicates(substr_ranges);
-
+    let (substr_range_functions, substr_range_predicates) =
+        get_substring_range_predicates(substr_ranges);
+    let index_range_predicates = make_index_range_predicates(substr_ranges.len());
     let substr_length = substr_ranges.len();
 
-
     // conditional returns and asserts based on whether the circuit should force a regex match
-    let (return_type, return_statement, force_match_condition) =
-        force_match_condition(
-            force_match,
-            final_states_predicate,
-            Some(format!("BoundedVec<Sequence, {substr_length}>"))
-        );
+    let (return_type, return_statement, force_match_condition) = force_match_condition(
+        force_match,
+        final_states_predicate,
+        Some(format!("BoundedVec<Sequence, {substr_length}>")),
+    );
 
     format!(
         r#"
+{substr_range_functions}
+
 pub fn regex_match<let N: u32>(input: [u8; N]) {return_type} {{
     let substrings = unsafe {{ __regex_match(input) }};
     
     // "Previous" state
     let mut s: Field = 0;
     s = {table_access_255};
-    // "Next"/upcoming state
-    let mut s_next: Field = 0;
-    let mut start_range = 0;
-    let mut end_range = 0;
+    
+    {index_range_predicates}
 
     // check the match
     for i in 0..N {{
         // state transition
         let temp = input[i] as Field;
-        s_next = {table_access_s_next};
-        let potential_s_next = {table_access_s_next_temp};
-        if s_next == 0 {{
-            s = 0;
-            s_next = potential_s_next;
-        }}
+        let mut (s_next, potential_s_next) =
+            extract_s_params_from_table({table_access_s_next});
+        let s_next_zero = S_IS_ZERO[s_next];
+
+        // equivalent of `if s_next == 0 {{ s = 0; s_next = potential_s_next }}
+        s = s * (1 - s_next_zero);
+        std::as_witness(s);
+        s_next = s_next_zero * (potential_s_next - s_next) + s_next;
         std::as_witness(s_next);
 
-        // range conditions for substring matches
-        if ((start_range == 0) & (end_range == 0)) {{
-            start_range = i as Field;
-        }}
-        if (({end_states_predicate}) & (end_range == 0)) {{
-            end_range = i as Field + 1;
-        }}
-        {substring_range_predicates}
+        {substr_range_predicates}
         s = s_next;
     }}
     // check final state
     {force_match_condition}
-    // constrain extracted substrings to be in match range
-    //let full_match = Sequence::new(start_range as u32, end_range as u32 - start_range as u32);
-    //let full_match_end = full_match.end();
-    // for i in 0..{substr_length} {{
-    //     let substring = substrings.get_unchecked(i);
-    //     let is_not_valid = i >= substrings.len();
-    //     let index_check = substring.index >= full_match.index;
-    //     let length_check = substring.end() <= full_match_end;
-    //     let check = (index_check) | is_not_valid;
-    //     assert(check, f"Substring {{i}} range is out of bounds of the full match found");
-    // }}
     {return_statement}
 }}
     "#

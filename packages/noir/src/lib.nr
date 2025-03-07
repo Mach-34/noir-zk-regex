@@ -3,8 +3,6 @@ pub mod capture;
 pub mod common;
 pub mod constants;
 
-use crate::constants::TIMESTAMP_LEN;
-
 // /**
 //  * Demonstrates ZKEmail where the body hash is regexed from the header
 //  */

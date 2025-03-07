@@ -5,3 +5,4 @@ authors = [""]
 compiler_version = ">=1.0.0"
 
 [dependencies]
+sort = { tag = "v0.2.3", git = "https://github.com/noir-lang/noir_sort" }

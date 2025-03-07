@@ -1775,10 +1775,13 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
     let mut s: Field = 0;
     s = table[255];
     // "Next"/upcoming state
-    let sequence = substrings.get_unchecked(0);
-    let start = sequence.index();
-    let end = sequence.end();
-    let range_predicates = get_index_sequence::<N>(start, end);
+    // let sequence = substrings.get_unchecked(0);
+    // let start = sequence.index();
+    // let end = sequence.end();
+    // let range_predicates = get_index_sequence::<N>(start, end);
+    let range_predicates = [
+        get_index_sequence::<N>(substrings.get_unchecked(0))
+    ];
 
     // check the match
     for i in 0..N {
@@ -1798,7 +1801,7 @@ pub fn regex_match<let N: u32>(input: [u8; N]) -> (BoundedVec<Sequence, 1>, bool
         std::as_witness(s_next);
 
         // instead of `substrings.get_unchecked(0).in_range(i), we read from the predicate array
-        let range_0 = range_predicates[i];
+        let range_0 = range_predicates[0][i];
 
         // NOTE: this assumes `s` and `s_next` are < 256
         // character_match = 0 IF s_next == 32 AND ((s == 31) OR (s == 32))

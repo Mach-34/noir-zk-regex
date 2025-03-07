@@ -1,3 +1,4 @@
+pub mod basic;
 pub mod body_hash;
 pub mod email_addr;
 pub mod email_domain;

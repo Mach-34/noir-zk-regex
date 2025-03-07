@@ -28,7 +28,9 @@ unconstrained fn __get_index_sequence<let N: u32>(start: u32, end: u32) -> [Fiel
 ///     2. Else, result[i] = 0`
 /// This method is much cheaper than testing `start <= i < end` for each value of `i`
 /// Cost: 3.333 * N gates
-pub(crate) fn get_index_sequence<let N: u32>(start: u32, end: u32) -> [Field; N] {
+pub(crate) fn get_index_sequence<let N: u32>(sequence: Sequence) -> [Field; N] {
+    let start = sequence.index();
+    let end = sequence.end();
     // Safety: get the result array and then constrain the fact that it is correct
     let result = unsafe { __get_index_sequence(start, end) };
 
@@ -540,6 +542,7 @@ pub(crate) unconstrained fn convert_to_sparse_packed_array<let N: u32, let NewN:
     }
 
     let new_num_entries = keys.len();
+    println(f"Number of new entries: {new_num_entries}");
     assert(new_num_entries == NewN);
 
     let mut new_keys: [Field; NewN] = [0; NewN];
