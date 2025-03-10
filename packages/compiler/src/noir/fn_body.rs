@@ -76,23 +76,34 @@ pub fn regex_match<let N: u32>(input: [u8; N]) {return_type} {{
     
     // "Previous" state
     let mut s: Field = 0;
-    s = {table_access_255};
+    s = table[255];
+    let mut s_next: Field = 0;
     
     {index_range_predicates}
 
     // check the match
     for i in 0..N {{
         // state transition
-        let temp = input[i] as Field;
-        let mut (s_next, potential_s_next) =
-            extract_s_params_from_table({table_access_s_next});
-        let s_next_zero = S_IS_ZERO[s_next];
+        //let temp = input[i] as Field;
+        //let mut (s_next, potential_s_next) =
+        //    extract_s_params_from_table({table_access_s_next});
+        //let s_next_zero = S_IS_ZERO[s_next];
 
         // equivalent of `if s_next == 0 {{ s = 0; s_next = potential_s_next }}
-        s = s * (1 - s_next_zero);
-        std::as_witness(s);
-        s_next = s_next_zero * (potential_s_next - s_next) + s_next;
-        std::as_witness(s_next);
+        //s = s * (1 - s_next_zero);
+        //std::as_witness(s);
+        //s_next = s_next_zero * (potential_s_next - s_next) + s_next;
+        //std::as_witness(s_next);
+
+        let temp = input[i] as Field;
+        let mut reset = false;
+        s_next = table[s * 256 + temp];
+        let potential_s_next = table[temp];
+        if s_next == 0 {{
+            reset = true;
+            s = 0;
+            s_next = potential_s_next;
+        }}
 
         {substr_range_predicates}
         s = s_next;
@@ -112,9 +123,9 @@ pub fn unconstrained_capture_def(
     sparse_array: bool,
 ) -> String {
     // table access according to lookup table arch
-    let table_access_255 = access_table("255", sparse_array);
-    let table_access_s_next = access_table("s * 256 + temp", sparse_array);
-    let table_access_s_next_temp = access_table("temp", sparse_array);
+    // let table_access_255 = access_table("255", sparse_array);
+    // let table_access_s_next = access_table("s * 256 + temp", sparse_array);
+    // let table_access_s_next_temp = access_table("temp", sparse_array);
 
     // DFA predicates and conditional substring sequence building
     let final_states_predicate = get_final_states_predicate(accept_state_ids);
@@ -131,7 +142,7 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) ->  BoundedVec<Se
 
     // "Previous" state
     let mut s: Field = 0;
-    s = {table_access_255};
+    s = table[255];
     // "Next"/upcoming state
     let mut s_next: Field = 0;
 
@@ -141,8 +152,8 @@ pub unconstrained fn __regex_match<let N: u32>(input: [u8; N]) ->  BoundedVec<Se
     for i in 0..input.len() {{
         let temp = input[i] as Field;
         let mut reset = false;
-        s_next = {table_access_s_next};
-        let potential_s_next = {table_access_s_next_temp};
+        s_next = table[s * 256 + temp];
+        let potential_s_next = table[temp];
         if s_next == 0 {{
             reset = true;
             s = 0;

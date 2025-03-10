@@ -16,11 +16,24 @@ fn main(input: [u8; MAX_INPUT_SIZE]) {
 
 #[test]
 fn test_out() {
-    let input = "\r\ndkim-signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20230601; t=1694989812; x=1695594612; dara=google.com; h=to:subject:message-id:date:from:mime-version:from:to:cc:subject :date:message-id:reply-to; bh=BWETwQ9JDReS4GyR2v2TTR8Bpzj9ayumsWQJ3q7vehs=; b="
-        .as_bytes();
+    // let input = "\r\ndkim-signature:v=1; a=rsa-sha256; c=relaxed/relaxed; d=gmail.com; s=20230601; t=1694989812; x=1695594612; dara=google.com; h=to:subject:message-id:date:from:mime-version:from:to:cc:subject :date:message-id:reply-to; bh=BWETwQ9JDReS4GyR2v2TTR8Bpzj9ayumsWQJ3q7vehs=; b="
+    //     .as_bytes();
+    let input = [
+        76, 97, 116, 105, 110, 45, 69, 120, 116, 101, 110, 115, 105, 111, 110, 61, 196, 151, 195,
+        150, 197, 176, 198, 150, 32, 71, 114, 101, 101, 107, 61, 207, 179, 206, 132, 206, 157, 32,
+        67, 121, 114, 105, 108, 108, 105, 99, 61, 208, 134, 209, 129, 210, 137, 209, 137, 208, 144,
+        208, 155, 209, 159, 209, 136, 209, 183,
+    ];
     let matches = regex::regex_match(input);
-    let substring = regex_common::extract_substring::<_, 267>(matches.get(0), input);
-    println(f"substring: {substring}");
+    let substring1: BoundedVec<u8, 267> = regex_common::extract_substring::<_, 267>(matches.get(0), input);
+    println(f"substring1: {substring1}");
+    let substring2: BoundedVec<u8, 267> = regex_common::extract_substring::<_, 267>(matches.get(1), input);
+    println(f"substring2: {substring2}");
+    let substring3: BoundedVec<u8, 267> = regex_common::extract_substring::<_, 267>(matches.get(2), input);
+    println(f"substring3: {substring3}");
+
+
+
 }
 
 // #[test]

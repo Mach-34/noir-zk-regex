@@ -144,7 +144,8 @@ use {use_common_path}::{{
     Sequence,
     S_IS_ZERO,
     get_index_sequence,
-    extract_s_params_from_table
+    extract_s_params_from_table,
+    SparseArray
 }};
 "#,
             use_common_path = use_common.unwrap(),
