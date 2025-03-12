@@ -1,6 +1,6 @@
 #!/bin/bash
 
-GEN_SUBSTRINGS=true
+GEN_SUBSTRINGS=false
 
 # generate using sparse array
 # zk-regex decomposed -d x.json \

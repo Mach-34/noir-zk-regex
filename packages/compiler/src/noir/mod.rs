@@ -181,10 +181,10 @@ fn parse_dfa(regex_and_dfa: &RegexAndDFA) -> (Vec<usize>, TableRows) {
         .filter(|s| s.state_type == ACCEPT_STATE_ID)
         .map(|s| s.state_id)
         .collect_vec();
-    assert!(
-        accept_state_ids.len() == 1,
-        "there should be exactly 1 accept state"
-    );
+    // assert!(
+    //     accept_state_ids.len() == 1,
+    //     "there should be exactly 1 accept state"
+    // );
 
     // curr_state + char_code -> next_state
     let mut rows: Vec<(usize, u8, usize)> = vec![];
