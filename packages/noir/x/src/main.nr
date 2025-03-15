@@ -44,33 +44,33 @@ fn main(
     }
 }
 
-// #[export]
-// pub fn bench(
-//     header: BoundedVec<u8, MAX_EMAIL_HEADER_LENGTH>,
-//     pubkey: RSAPubkey<KEY_LIMBS_2048>,
-//     signature: [Field; KEY_LIMBS_2048],
-//     body: BoundedVec<u8, MAX_EMAIL_BODY_LENGTH>,
-// ) -> Output {
-//     // 1. verify header
-//     pubkey.verify_dkim_signature(header, signature);
-//     // 2. extract the body hash from the header
-//     let signed_body_hash = decoded_body_hash::regex_match(header);
-//     // 3. hash the asserted body
-//     let computed_body_hash: [u8; 32] = sha256_var(body.storage(), body.len() as u64);
-//     // 4. compare found body hash
-//     assert(
-//         signed_body_hash == computed_body_hash,
-//         "SHA256 hash computed over body does not match body hash found in DKIM-signed header",
-//     );
-//     // 5. get the timestamp (cuz why not)
-//     let timestamp = timestamp_regex::regex_match(header);
-//     // 6. publicly output the pubkey hash, email nullifier, and timestamp
-//     Output {
-//         pubkey_hash: pubkey.hash(),
-//         email_nullifier: pedersen_hash(signature),
-//         timestamp: timestamp_regex::parse_timestamp(timestamp),
-//     }
-// }
+#[export]
+pub fn bench(
+    header: BoundedVec<u8, MAX_EMAIL_HEADER_LENGTH>,
+    pubkey: RSAPubkey<KEY_LIMBS_2048>,
+    signature: [Field; KEY_LIMBS_2048],
+    body: BoundedVec<u8, MAX_EMAIL_BODY_LENGTH>,
+) -> Output {
+    // 1. verify header
+    pubkey.verify_dkim_signature(header, signature);
+    // 2. extract the body hash from the header
+    let signed_body_hash = decoded_body_hash::regex_match(header);
+    // 3. hash the asserted body
+    let computed_body_hash: [u8; 32] = sha256_var(body.storage(), body.len() as u64);
+    // 4. compare found body hash
+    assert(
+        signed_body_hash == computed_body_hash,
+        "SHA256 hash computed over body does not match body hash found in DKIM-signed header",
+    );
+    // 5. get the timestamp (cuz why not)
+    let timestamp = timestamp_regex::regex_match(header);
+    // 6. publicly output the pubkey hash, email nullifier, and timestamp
+    Output {
+        pubkey_hash: pubkey.hash(),
+        email_nullifier: pedersen_hash(signature),
+        timestamp: timestamp_regex::parse_timestamp(timestamp),
+    }
+}
 
 #[test]
 fn test_zkemail_with_regex() {
