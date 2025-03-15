@@ -1,0 +1,9 @@
+[package]
+name = "test_regex_helpers"
+type = "bin"
+authors = [""]
+compiler_version = ">=1.0.0"
+
+[dependencies]
+# zkemail = { path = "../../../../zkemail.nr/lib" }
+# zkemail = { git = "https://github.com/zkemail/zkemail.nr", tag = "v0.4.2", directory = "lib"} 
